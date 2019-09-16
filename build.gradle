@@ -30,6 +30,7 @@ if (!JavaVersion.current().java11Compatible) {
   "  Detected version ${JavaVersion.current()}")
 }
 
+// Test comment
 group = 'org.hyperledger.besu'
 
 defaultTasks 'build', 'checkLicenses', 'javadoc'
