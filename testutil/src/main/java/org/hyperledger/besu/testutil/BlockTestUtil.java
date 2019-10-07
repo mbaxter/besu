@@ -35,6 +35,8 @@ public final class BlockTestUtil {
       Suppliers.memoize(BlockTestUtil::supplyTestChainResources);
   private static final Supplier<ChainResources> mainnetChainSupplier =
       Suppliers.memoize(BlockTestUtil::supplyMainnetChainResources);
+  private static final Supplier<ChainResources> ropstenChainSupplier =
+    Suppliers.memoize(BlockTestUtil::supplyRopstenChainResources);
   private static final Supplier<ChainResources> forkOutdatedSupplier =
       Suppliers.memoize(BlockTestUtil::supplyOutdatedForkResources);
   private static final Supplier<ChainResources> forkUpgradedSupplier =
@@ -54,6 +56,10 @@ public final class BlockTestUtil {
 
   public static ChainResources getMainnetResources() {
     return mainnetChainSupplier.get();
+  }
+
+  public static ChainResources getRopstenResources() {
+    return ropstenChainSupplier.get();
   }
 
   public static ChainResources getOutdatedForkResources() {
@@ -78,6 +84,15 @@ public final class BlockTestUtil {
             BlockTestUtil.class.getClassLoader().getResource("mainnet-data/mainnet.json"));
     final URL blocksURL =
         ensureFileUrl(BlockTestUtil.class.getClassLoader().getResource("mainnet-data/1000.blocks"));
+    return new ChainResources(genesisURL, blocksURL);
+  }
+
+  private static ChainResources supplyRopstenChainResources() {
+    final URL genesisURL =
+      ensureFileUrl(
+        BlockTestUtil.class.getClassLoader().getResource("ropsten-data/ropsten.json"));
+    final URL blocksURL =
+      ensureFileUrl(BlockTestUtil.class.getClassLoader().getResource("ropsten-data/500.blocks"));
     return new ChainResources(genesisURL, blocksURL);
   }
 
