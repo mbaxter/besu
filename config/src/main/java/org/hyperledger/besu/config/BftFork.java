@@ -31,6 +31,7 @@ public class BftFork {
   private static final String VALIDATORS_KEY = "validators";
   private static final String BLOCK_PERIOD_SECONDS_KEY = "blockperiodseconds";
   private static final String BLOCK_REWARD_KEY = "blockreward";
+  private static final String MINING_BENEFICIARY_KEY = "miningbeneficiary";
 
   private final ObjectNode forkConfigRoot;
 
@@ -62,6 +63,14 @@ public class BftFork {
       return Optional.of(new BigInteger(1, Bytes.fromHexStringLenient(weiStr).toArrayUnsafe()));
     }
     return Optional.of(new BigInteger(weiStr));
+  }
+
+  public Optional<String> getMiningBeneficiary() {
+    return JsonUtil.getString(forkConfigRoot, MINING_BENEFICIARY_KEY);
+  }
+
+  public boolean hasNonValidatorChanges() {
+    return getMiningBeneficiary().isPresent() || getBlockRewardWei().isPresent();
   }
 
   public Optional<List<String>> getValidators() throws IllegalArgumentException {

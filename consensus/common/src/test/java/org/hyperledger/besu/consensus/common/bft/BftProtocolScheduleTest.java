@@ -187,6 +187,7 @@ public class BftProtocolScheduleTest {
 
     final long transitionBlock = 5L;
     final BftFork fork = mock(BftFork.class);
+    when(fork.hasNonValidatorChanges()).thenReturn(true);
     when(fork.getForkBlock()).thenReturn(transitionBlock);
     final BigInteger forkBlockReward = arbitraryBlockReward.multiply(BigInteger.valueOf(2));
     when(fork.getBlockRewardWei()).thenReturn(Optional.of(forkBlockReward));
@@ -204,5 +205,56 @@ public class BftProtocolScheduleTest {
         .isEqualTo(Wei.of(arbitraryBlockReward));
     assertThat(schedule.getByBlockNumber(transitionBlock).getBlockReward())
         .isEqualTo(Wei.of(forkBlockReward));
+  }
+
+  @Test
+  public void miningBeneficiarySpecifiedInTransitionCreatesNewMilestone() {
+    final BigInteger originalBlockReward = BigInteger.valueOf(5);
+    final Address originalBeneficiary = Address.fromHexString("0x1");
+    final Address forkBeneficiary = Address.fromHexString("0x2");
+    final BftConfigOptions configOptions = mock(BftConfigOptions.class);
+    when(configOptions.getMiningBeneficiary())
+        .thenReturn(Optional.of(originalBeneficiary.toString()));
+    when(configOptions.getBlockRewardWei()).thenReturn(originalBlockReward);
+    when(configOptions.getEpochLength()).thenReturn(3000L);
+    when(genesisConfig.getBftConfigOptions()).thenReturn(configOptions);
+    when(genesisConfig.isIbft2()).thenReturn(true);
+
+    final long transitionBlock = 5L;
+    final BftFork fork = mock(BftFork.class);
+    when(fork.hasNonValidatorChanges()).thenReturn(true);
+    when(fork.getForkBlock()).thenReturn(transitionBlock);
+    when(fork.getBlockRewardWei()).thenReturn(Optional.empty());
+    when(fork.getMiningBeneficiary()).thenReturn(Optional.of(forkBeneficiary.toString()));
+    final TransitionsConfigOptions transitions = mock(TransitionsConfigOptions.class);
+    when(transitions.getIbftForks()).thenReturn(List.of(fork));
+    when(genesisConfig.getTransitions()).thenReturn(transitions);
+
+    final MutableProtocolSchedule schedule =
+        (MutableProtocolSchedule)
+            BftProtocolSchedule.create(
+                genesisConfig, BftProtocolScheduleTest::arbitraryRulesetBuilder, bftExtraDataCodec);
+
+    assertThat(schedule.streamMilestoneBlocks().count()).isEqualTo(2);
+
+    // Check mining beneficiary
+    assertThat(
+            schedule
+                .getByBlockNumber(0)
+                .getMiningBeneficiaryCalculator()
+                .calculateBeneficiary(mock(BlockHeader.class)))
+        .isEqualTo(originalBeneficiary);
+    assertThat(
+            schedule
+                .getByBlockNumber(transitionBlock)
+                .getMiningBeneficiaryCalculator()
+                .calculateBeneficiary(mock(BlockHeader.class)))
+        .isEqualTo(forkBeneficiary);
+
+    // Check block reward
+    assertThat(schedule.getByBlockNumber(0).getBlockReward())
+        .isEqualTo(Wei.of(originalBlockReward));
+    assertThat(schedule.getByBlockNumber(transitionBlock).getBlockReward())
+        .isEqualTo(Wei.of(originalBlockReward));
   }
 }

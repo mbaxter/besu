@@ -33,6 +33,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -58,7 +59,8 @@ public class BftProtocolSchedule {
                 config.isQuorum(),
                 blockHeaderRuleset,
                 bftExtraDataCodec,
-                config.getBftConfigOptions().getBlockRewardWei()));
+                Optional.of(config.getBftConfigOptions().getBlockRewardWei()),
+                config.getBftConfigOptions().getMiningBeneficiary()));
 
     final Supplier<List<BftFork>> forks;
     if (config.isIbft2()) {
@@ -68,7 +70,7 @@ public class BftProtocolSchedule {
     }
 
     forks.get().stream()
-        .filter(fork -> fork.getBlockRewardWei().isPresent())
+        .filter(BftFork::hasNonValidatorChanges)
         .forEach(
             fork ->
                 specMap.put(
@@ -80,7 +82,8 @@ public class BftProtocolSchedule {
                             config.isQuorum(),
                             blockHeaderRuleset,
                             bftExtraDataCodec,
-                            fork.getBlockRewardWei().get())));
+                            fork.getBlockRewardWei(),
+                            fork.getMiningBeneficiary())));
 
     final ProtocolSpecAdapters specAdapters = new ProtocolSpecAdapters(specMap);
 
@@ -120,14 +123,31 @@ public class BftProtocolSchedule {
       final boolean goQuorumMode,
       final Function<Integer, BlockHeaderValidator.Builder> blockHeaderRuleset,
       final BftExtraDataCodec bftExtraDataCodec,
-      final BigInteger blockReward) {
+      final Optional<BigInteger> blockRewardConfig,
+      final Optional<String> miningBeneficiaryConfig) {
 
     if (configOptions.getEpochLength() <= 0) {
       throw new IllegalArgumentException("Epoch length in config must be greater than zero");
     }
 
-    if (blockReward.signum() < 0) {
-      throw new IllegalArgumentException("Bft Block reward in config cannot be negative");
+    if (blockRewardConfig.isPresent()) {
+      final BigInteger blockReward = blockRewardConfig.get();
+      if (blockRewardConfig.get().signum() < 0) {
+        throw new IllegalArgumentException("Bft Block reward in config cannot be negative");
+      }
+      builder.blockReward(Wei.of(blockReward));
+    }
+
+    if (miningBeneficiaryConfig.isPresent()) {
+      final Address miningBeneficiary;
+      try {
+        // Precalculate beneficiary to ensure string is valid now, rather than on lambda execution.
+        miningBeneficiary = Address.fromHexString(miningBeneficiaryConfig.get());
+      } catch (final IllegalArgumentException e) {
+        throw new IllegalArgumentException(
+            "Mining beneficiary in config is not a valid ethereum address", e);
+      }
+      builder.miningBeneficiaryCalculator(header -> miningBeneficiary);
     }
 
     builder
@@ -139,21 +159,8 @@ public class BftProtocolSchedule {
         .blockValidatorBuilder(MainnetProtocolSpecs.blockValidatorBuilder(goQuorumMode))
         .blockImporterBuilder(MainnetBlockImporter::new)
         .difficultyCalculator((time, parent, protocolContext) -> BigInteger.ONE)
-        .blockReward(Wei.of(blockReward))
         .skipZeroBlockRewards(true)
         .blockHeaderFunctions(BftBlockHeaderFunctions.forOnChainBlock(bftExtraDataCodec));
-
-    if (configOptions.getMiningBeneficiary().isPresent()) {
-      final Address miningBeneficiary;
-      try {
-        // Precalculate beneficiary to ensure string is valid now, rather than on lambda execution.
-        miningBeneficiary = Address.fromHexString(configOptions.getMiningBeneficiary().get());
-      } catch (final IllegalArgumentException e) {
-        throw new IllegalArgumentException(
-            "Mining beneficiary in config is not a valid ethereum address", e);
-      }
-      builder.miningBeneficiaryCalculator(header -> miningBeneficiary);
-    }
 
     return builder;
   }
